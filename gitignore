@@ -1,21 +1,57 @@
 # Byte-compiled / cache
 __pycache__/
 *.py[cod]
-*.egg-info/
+*.pyo
+*.pyd
+*.so
 
 # Virtual environments
-.venv/
 venv/
-.env
+.venv/
+ENV/
+env/
 
-# Data files
-logs/
+# Package build artifacts
+*.egg-info/
+build/
+dist/
+
+# Logs and debug
 *.log
-csv_data/
-StockList.csv
-plots/
-*.html
+logs/
 
-# OS
+# Jupyter notebooks
+*.ipynb_checkpoints/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-specific files
 .DS_Store
 Thumbs.db
+
+# Data & logs
+StockList.csv
+*.log
+plots/
+csv_data/
+demand_zones_*.csv
+
+# Build & metadata
+*.egg-info/
+build/
+dist/
+
+# Jupyter & IDEs
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Custom project artifacts
+StockList.csv
+ZoneScanner.egg-info
+.gitignore
+*.html
