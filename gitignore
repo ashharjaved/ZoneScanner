@@ -22,6 +22,7 @@ logs/
 
 # Jupyter notebooks
 *.ipynb_checkpoints/
+.ipynb_checkpoints/
 
 # IDEs and editors
 .vscode/
@@ -55,3 +56,5 @@ StockList.csv
 ZoneScanner.egg-info
 .gitignore
 *.html
+.ipynb_checkpoints/
+.ipynb_checkpoints
