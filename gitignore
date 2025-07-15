@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+logs/
+*.log
+csv_data/
+plots/
+StockList.csv
+*.html

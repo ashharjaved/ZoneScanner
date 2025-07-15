@@ -1,0 +1,3 @@
+[console_scripts]
+demandzone = ZoneScanner.main:main
+fetch-stocks = ZoneScanner.fetch:main

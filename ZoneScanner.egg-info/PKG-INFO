@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: ZoneScanner
+Version: 0.1.0
+Summary: Multi-timeframe demand zone detector with plotting
+Author: Ashhar Javed
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
