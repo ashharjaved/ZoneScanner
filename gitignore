@@ -1,13 +1,21 @@
-# Python
+# Byte-compiled / cache
 __pycache__/
 *.py[cod]
 *.egg-info/
-.env
+
+# Virtual environments
 .venv/
 venv/
+.env
+
+# Data files
 logs/
 *.log
 csv_data/
-plots/
 StockList.csv
+plots/
 *.html
+
+# OS
+.DS_Store
+Thumbs.db

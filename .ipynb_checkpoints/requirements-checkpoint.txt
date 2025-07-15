@@ -1,0 +1,7 @@
+pandas==2.3.1
+plotly==6.2.0
+setuptools==65.5.0
+stockfetcher==1.0.0
+stockfetcher==1.1.0
+yfinance==0.2.64
+yfinance==0.2.65
