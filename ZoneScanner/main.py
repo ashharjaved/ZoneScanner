@@ -53,26 +53,29 @@ def main():
         if args.limit:
             symbols = symbols[:args.limit]
 
+    all_zones = []
     for tf in args.tf:
         scanner = StockScanner(
             tf=tf,
             fresh_only=args.fresh,
             plot=args.plot,
-            force_refresh=args.no_cache
+            min_base=args.min_base,
+            max_base=args.max_base,
+            distance_range=tuple(args.distance_range)
         )
-        scanner.run(
+        zones_df = scanner.run(
             source_csv="StockList.csv" if not args.symbol else None,
             sectors=args.sector,
             symbols=symbols
         )
+        all_zones.extend(zones_df.to_dict(orient="records"))
         
     # Final summary log
     logging.info("\n================ SUMMARY ================")
     total_zones = 0
-    for df in all_zones:
-        for _, row in df.iterrows():
-            logging.info(f"✅ {row['Symbol']} | {row['Timeframe']} | Score: {row['Score']} | Zone: {row['Proximal']} - {row['Distal']} | Start: {row['Start']}")
-            total_zones += 1
+    for zone in all_zones:
+        logging.info(f"✅ {zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Proximal']} - {zone['Distal']} | Start: {zone['Start']}")
+        total_zones += 1
     if total_zones == 0:
         logging.info("⚠️ No valid zones detected.")
     else:

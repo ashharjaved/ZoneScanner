@@ -12,11 +12,17 @@ class StockScanner:
                  cache_dir: str = "csv_data",
                  tf: str = "1d",
                  fresh_only: bool = True,
-                 plot: bool = False):
+                 plot: bool = False,
+                 min_base: int = 1,
+                 max_base: int = 3,
+                 distance_range: tuple = (1.0, 5.0)):
         self.cache_dir = cache_dir
         self.fresh_only = fresh_only
         self.plot = plot
         self.tf = tf
+        self.min_base = min_base
+        self.max_base = max_base
+        self.distance_range = distance_range
         self.period = self._get_max_period(tf)
         os.makedirs(self.cache_dir, exist_ok=True)
 
@@ -71,8 +77,8 @@ class StockScanner:
     def run(self, source_csv: str = "StockList.csv", sectors: Optional[List[str]] = None, symbols: List[str] = None):
         if symbols is None:
             symbols = get_symbol_list(csv_path=source_csv, sectors=sectors)
-        print("🚀 Starting demand‑zone scan …")
-        logging.info("🚀 Starting demand‑zone scan …")
+        print(f"🚀 Starting demand-zone scan for timeframe {self.tf} …")
+        logging.info(f"🚀 Starting demand-zone scan for timeframe {self.tf} …")
 
         all_zones = []
         for symbol in symbols:
@@ -86,7 +92,10 @@ class StockScanner:
                     timeframes={self.tf: self.period},
                     fresh_only=self.fresh_only,
                     plot=self.plot,
-                    local_csv_dir=self.cache_dir
+                    local_csv_dir=self.cache_dir,
+                    min_base=self.min_base,
+                    max_base=self.max_base,
+                    distance_range=self.distance_range
                 )
                 zones_df = scanner.run()
                 zones = zones_df.to_dict(orient="records") if not zones_df.empty else []
@@ -101,7 +110,12 @@ class StockScanner:
             result_df = pd.DataFrame(all_zones)
             if not result_df.empty and "Score" in result_df.columns:
                 result_df = result_df.sort_values(by="Score", ascending=False)
-            result_df.to_csv("demand_zones_all_TFs.csv", index=False)
-            print("\n📁 Saved to: demand_zones_all_TFs.csv")
+            output_file = f"demand_zones_{self.tf}.csv"
+            result_df.to_csv(output_file, index=False)
+            print(f"\n📁 Saved to: {output_file}")
+            logging.info(f"Saved demand zones to: {output_file}")
         else:
-            print("🚫 No valid demand zones detected.")
+            print(f"🚫 No valid demand zones detected for timeframe {self.tf}.")
+            logging.info(f"No valid demand zones detected for timeframe {self.tf}.")
+
+        return pd.DataFrame(all_zones)
