@@ -10,6 +10,30 @@ from ZoneScanner.fetch import get_symbol_list
 # demandzone --tf 1wk --symbol NH.NS --limit 5 --fresh --distance-range 1 5 --min-base 1 --max-base 3
 # demandzone --tf 1wk --limit 5 --fresh --distance-range 1 5 --min-base 1 --max-base 3
 
+LOG_DIR = "logs"
+LOG_RETENTION_DAYS = 7
+
+def setup_logging():
+    os.makedirs(LOG_DIR, exist_ok=True)
+    now = datetime.now()
+    for f in os.listdir(LOG_DIR):
+        path = os.path.join(LOG_DIR, f)
+        if os.path.isfile(path):
+            mod_time = datetime.fromtimestamp(os.path.getmtime(path))
+            if (now - mod_time).days > LOG_RETENTION_DAYS:
+                os.remove(path)
+    log_path = os.path.join(LOG_DIR, f"scanner_{now.strftime('%Y%m%d_%H%M%S')}.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(log_path),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    logging.info(f"📋 Logging to: {log_path}")
+    return log_path
+
 def main():
     parser = argparse.ArgumentParser(description="Demand Zone Screener")
     parser.add_argument("--tf", nargs="+", default=["1mo", "1wk", "1d"], help="Timeframes to scan")
@@ -24,6 +48,8 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="Force fresh OHLC data download, ignore CSV cache")
 
     args = parser.parse_args()
+    setup_logging()
+    
     if args.symbol:
         symbols = [args.symbol]
     else:
@@ -42,7 +68,18 @@ def main():
             sectors=args.sector,
             symbols=symbols
         )
-        
+
+    # Final summary log
+    logging.info("\n================ SUMMARY ================")
+    total_zones = 0
+    for zone in all_zones:
+        logging.info(f"✅ {zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Proximal']} - {zone['Distal']} | Start: {zone['Start']}")
+        total_zones += 1
+    if total_zones == 0:
+        logging.info("⚠️ No valid zones detected.")
+    else:
+        logging.info(f"🎯 Total zones detected: {total_zones}")
+    logging.info("========================================")      
     
 if __name__ == "__main__":
     main()
