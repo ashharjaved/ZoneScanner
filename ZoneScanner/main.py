@@ -6,29 +6,9 @@ from datetime import datetime
 from ZoneScanner.stock_scanner import StockScanner
 from ZoneScanner.fetch import get_symbol_list
 
-LOG_DIR = "logs"
-LOG_RETENTION_DAYS = 7
-
-def setup_logging():
-    os.makedirs(LOG_DIR, exist_ok=True)
-    now = datetime.now()
-    for f in os.listdir(LOG_DIR):
-        path = os.path.join(LOG_DIR, f)
-        if os.path.isfile(path):
-            mod_time = datetime.fromtimestamp(os.path.getmtime(path))
-            if (now - mod_time).days > LOG_RETENTION_DAYS:
-                os.remove(path)
-    log_path = os.path.join(LOG_DIR, f"scanner_{now.strftime('%Y%m%d_%H%M%S')}.log")
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-    logging.info(f"📋 Logging to: {log_path}")
-    return log_path
+# Example
+# demandzone --tf 1wk --symbol NH.NS --limit 5 --fresh --distance-range 1 5 --min-base 1 --max-base 3
+# demandzone --tf 1wk --limit 5 --fresh --distance-range 1 5 --min-base 1 --max-base 3
 
 def main():
     parser = argparse.ArgumentParser(description="Demand Zone Screener")
@@ -44,8 +24,6 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="Force fresh OHLC data download, ignore CSV cache")
 
     args = parser.parse_args()
-    setup_logging()
-
     if args.symbol:
         symbols = [args.symbol]
     else:
@@ -53,34 +31,18 @@ def main():
         if args.limit:
             symbols = symbols[:args.limit]
 
-    all_zones = []
     for tf in args.tf:
         scanner = StockScanner(
             tf=tf,
-            fresh_only=args.fresh,
+            fresh_only=args.no_cache,
             plot=args.plot,
-            min_base=args.min_base,
-            max_base=args.max_base,
-            distance_range=tuple(args.distance_range)
         )
-        zones_df = scanner.run(
+        scanner.run(
             source_csv="StockList.csv" if not args.symbol else None,
             sectors=args.sector,
             symbols=symbols
         )
-        all_zones.extend(zones_df.to_dict(orient="records"))
         
-    # Final summary log
-    logging.info("\n================ SUMMARY ================")
-    total_zones = 0
-    for zone in all_zones:
-        logging.info(f"✅ {zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Proximal']} - {zone['Distal']} | Start: {zone['Start']}")
-        total_zones += 1
-    if total_zones == 0:
-        logging.info("⚠️ No valid zones detected.")
-    else:
-        logging.info(f"🎯 Total zones detected: {total_zones}")
-    logging.info("========================================")
     
 if __name__ == "__main__":
     main()

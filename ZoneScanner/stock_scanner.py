@@ -12,17 +12,11 @@ class StockScanner:
                  cache_dir: str = "csv_data",
                  tf: str = "1d",
                  fresh_only: bool = True,
-                 plot: bool = False,
-                 min_base: int = 1,
-                 max_base: int = 3,
-                 distance_range: tuple = (1.0, 5.0)):
+                 plot: bool = False):
         self.cache_dir = cache_dir
         self.fresh_only = fresh_only
         self.plot = plot
         self.tf = tf
-        self.min_base = min_base
-        self.max_base = max_base
-        self.distance_range = distance_range
         self.period = self._get_max_period(tf)
         os.makedirs(self.cache_dir, exist_ok=True)
 
@@ -48,6 +42,7 @@ class StockScanner:
             )
             if df.empty:
                 print(f"⚠️ No data for {symbol}")
+                logging.warning(f"No data for {symbol}")
                 return pd.DataFrame()
 
             if isinstance(df.columns, pd.MultiIndex):
@@ -77,8 +72,8 @@ class StockScanner:
     def run(self, source_csv: str = "StockList.csv", sectors: Optional[List[str]] = None, symbols: List[str] = None):
         if symbols is None:
             symbols = get_symbol_list(csv_path=source_csv, sectors=sectors)
-        print(f"🚀 Starting demand-zone scan for timeframe {self.tf} …")
-        logging.info(f"🚀 Starting demand-zone scan for timeframe {self.tf} …")
+        print("🚀 Starting demand‑zone scan …")
+        logging.info("Starting demand‑zone scan …")
 
         all_zones = []
         for symbol in symbols:
@@ -92,10 +87,7 @@ class StockScanner:
                     timeframes={self.tf: self.period},
                     fresh_only=self.fresh_only,
                     plot=self.plot,
-                    local_csv_dir=self.cache_dir,
-                    min_base=self.min_base,
-                    max_base=self.max_base,
-                    distance_range=self.distance_range
+                    local_csv_dir=self.cache_dir
                 )
                 zones_df = scanner.run()
                 zones = zones_df.to_dict(orient="records") if not zones_df.empty else []
@@ -104,7 +96,7 @@ class StockScanner:
 
             except Exception as e:
                 print(f"❌ Error with {symbol} [{self.tf}] – {type(e).__name__}: {e}")
-                logging.warning(f"❌ Error with {symbol} [{self.tf}] – {type(e).__name__}: {e}")
+                logging.warning(f"Error with {symbol} [{self.tf}] – {type(e).__name__}: {e}")
 
         if all_zones:
             result_df = pd.DataFrame(all_zones)
@@ -115,7 +107,5 @@ class StockScanner:
             print(f"\n📁 Saved to: {output_file}")
             logging.info(f"Saved demand zones to: {output_file}")
         else:
-            print(f"🚫 No valid demand zones detected for timeframe {self.tf}.")
-            logging.info(f"No valid demand zones detected for timeframe {self.tf}.")
-
-        return pd.DataFrame(all_zones)
+            print("🚫 No valid demand zones detected.")
+            logging.info("No valid demand zones detected.")

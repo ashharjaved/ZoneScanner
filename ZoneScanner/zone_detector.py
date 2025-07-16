@@ -38,7 +38,7 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
 
     tf_label_map = {"1mo": "Month", "1wk": "Week", "1d": "Day"}
     label = tf_label_map.get(tf, "Month")
-    time_fmt = {"Month": "%Y-%m", "Week": "%Y-%U", "Day": "%Y-%m-%d"}[label]
+    time_fmt = {"Month": "%Y-%m", "Week": "%m-%d", "Day": "%Y-%m-%d"}[label]
 
     for i in range(3, len(df) - 4):
         leg_in = df.iloc[i - 1]
@@ -102,15 +102,12 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
     return zones
 
 class DemandZoneScanner:
-    def __init__(self, symbols, timeframes, fresh_only=True, plot=False, local_csv_dir="csv_data", min_base=1, max_base=3, distance_range=(1.0, 5.0)):
+    def __init__(self, symbols, timeframes, fresh_only=True, plot=False, local_csv_dir="csv_data"):
         self.symbols = symbols
         self.timeframes = timeframes
         self.fresh_only = fresh_only
         self.plot = plot
         self.local_csv_dir = local_csv_dir
-        self.min_base = min_base
-        self.max_base = max_base
-        self.distance_range = distance_range
 
     def run(self):
         all_zones = []
@@ -143,12 +140,8 @@ class DemandZoneScanner:
                     df.index.name = "Date"
                     df["Date"] = df.index
 
-                    zones = detect_zones(df, tf, symbol, self.fresh_only, self.min_base, self.max_base, self.distance_range)
+                    zones = detect_zones(df, tf, symbol, self.fresh_only)
                     all_zones.extend(zones)
-
-                    if self.plot and zones:
-                        for zone in zones:
-                            self.plot_zone(df, zone)
 
                 except Exception as e:
                     print(f"❌ Error with {symbol} [{tf}] – {type(e).__name__}: {e}")
