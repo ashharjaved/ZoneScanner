@@ -28,6 +28,21 @@ def is_base_candle(candle) -> bool:
         (to_scalar(candle['High']) - to_scalar(candle['Low'])) > 0
     )
 
+def count_green_after_legout(df, legout_end_idx):
+    """
+    Count number of green candles after leg-out until the first red candle appears.
+    """
+    count = 0
+    for i in range(legout_end_idx + 1, len(df)):
+        try:
+            if to_float(df.iloc[i]["Close"]) > to_float(df.iloc[i]["Open"]):  # green candle
+                count += 1
+            else:
+                break  # first red candle
+        except Exception:
+            break  # defensively break on any data issue
+    return count
+
 def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True, min_base: int = 1, max_base: int = 3, distance_range=(1.0, 5.0)) -> list[dict]:
     zones = []
     df = df.copy()
@@ -52,6 +67,7 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
                 continue
 
             leg_out_candle = df.iloc[i + base_len]
+            legout_end_idx = i + base_len
             if not is_strong_bullish(leg_in) or not is_strong_bullish(leg_out_candle):
                 continue
 
@@ -78,16 +94,38 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
             proximal = to_float(base["Close"].max())
             distal = to_float(base["Low"].min())
             distance_pct = round(((cmp - proximal) / cmp) * 100, 2)
+            stop_loss_pct = round(((proximal - distal) / proximal) * 100, 2)
 
             if distance_pct < distance_range[0] or distance_pct > distance_range[1]:
                 continue
+
+            # ✅ Green candles after leg-out
+            green_candles_after_legout = count_green_after_legout(df, legout_end_idx)
+            
+            # ✅ Equilibrium
+            equilibrium = round((proximal + distal) / 2, 2)
+
+            # ✅ Curve Position
+            #curve_low = df["Low"].min()
+            #curve_high = df["High"].max()
+            #position = (equilibrium - curve_low) / (curve_high - curve_low)
+
+            #if position <= 0.25:
+            #    curve_label = "Very Low on Curve"
+            #elif position <= 0.5:
+            #    curve_label = "Low on Curve"
+            #else:
+            #    curve_label = "High on Curve"
 
             zones.append({
                 "Symbol": symbol,
                 "Timeframe": tf,
                 "Start": start_date.strftime("%Y-%m-%d"),
-                "Proximal": round(proximal, 2),
-                "Distal": round(distal, 2),
+                "Entry": round(proximal, 2),
+                "Stop Loss": round(distal, 2),
+                "Equilibrium": equilibrium,
+                "Green After LegOut": green_candles_after_legout,
+                #"Curve Position": curve_label,
                 "Score": score,
                 "Fresh": fresh,
                 "Legout Strength": round(leg_out_strength, 2),
@@ -95,8 +133,9 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
                 f"Base {label}": ", ".join(to_scalar(row["Date"]).strftime(time_fmt) for _, row in base.iterrows()),
                 f"Leg-in {label}": to_scalar(leg_in["Date"]).strftime(time_fmt),
                 f"Leg-out {label}": to_scalar(leg_out_candle["Date"]).strftime(time_fmt),
-                "Zone Type": "MIT" if tf == "1mo" else "WIT",
-                "Distance": distance_pct
+                "Zone Type": {"1mo": "MIT", "1wk": "WIT", "1d": "DIT"}.get(tf, "Unknown"),
+                "Distance": distance_pct,
+                "Stop Loss %": stop_loss_pct
             })
 
     return zones
@@ -158,8 +197,8 @@ class DemandZoneScanner:
             print(f"⚠️ No window data for {symbol} @ {start_date}")
             return
 
-        entry = zone["Proximal"]
-        stop = zone["Distal"] - buffer
+        entry = zone["Entry"]
+        stop = zone["Stop Loss"] - buffer
         zone_color = "rgba(0,200,100,0.2)" if tf == "1mo" else "rgba(0,100,255,0.2)"
 
         fig = go.Figure(data=[

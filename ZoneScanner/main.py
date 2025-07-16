@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import logging
+import io
 from datetime import datetime
 from ZoneScanner.stock_scanner import StockScanner
 from ZoneScanner.fetch import get_symbol_list
@@ -12,8 +13,6 @@ from ZoneScanner.fetch import get_symbol_list
 
 LOG_DIR = "logs"
 LOG_RETENTION_DAYS = 7
-
-import io
 
 def setup_logging():
     # 💡 Force stdout/stderr to use UTF-8 and avoid UnicodeEncodeError
@@ -92,18 +91,18 @@ def main():
             logging.info(f"Zones found in tf={tf}: {len(scanner.zones)}")
             all_zones.extend(scanner.zones)
         else:
-            logging.info(f"No zones found in tf={tf}")
+            logging.info(f"⚠️ No zones found in tf={tf}")
 
     # Final summary log
     logging.info("\n================ SUMMARY ================")
     total_zones = 0
     for zone in all_zones:
-        logging.info(f"{zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Proximal']} - {zone['Distal']} | Start: {zone['Start']}")
+        logging.info(f"{zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Entry']} - {zone['Stop Loss']} | Start: {zone['Start']}")
         total_zones += 1
     if total_zones == 0:
-        logging.info("No valid zones detected.")
+        logging.info("⚠️ No valid zones detected.")
     else:
-        logging.info(f"Total zones detected: {total_zones}")
+        logging.info(f"🎯 Total zones detected: {total_zones}")
     logging.info("========================================")      
     
 if __name__ == "__main__":

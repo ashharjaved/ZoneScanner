@@ -23,7 +23,7 @@ def fetch_stocks(limit: int = 5, sectors: Optional[List[str]] = None) -> pd.Data
         df = df[required_columns]
         df.to_csv(csv_file, index=False)
         print(f"Saved stock list to {csv_file}")
-        logging.info(f"Saved stock list to {csv_file}")
+        logging.info(f"✅ Saved stock list to {csv_file}")
 
     if sectors is not None:
         df = df[df['Sector'].isin(sectors)]
@@ -35,7 +35,7 @@ def get_symbol_list(csv_path: str = "StockList.csv", sectors: Optional[List[str]
         df = fetch_stocks(limit=None, sectors=sectors)
         return df['YahooSymbol'].dropna().astype(str).tolist()
     except Exception as e:
-        logging.warning(f"⚠️ Failed to fetch symbols: {e}. Using hardcoded symbols.")
+        logging.warning(f"Failed to fetch symbols: {e}. Using hardcoded symbols.")
         return ["RELIANCE.NS", "ITC.NS"]
 
 if __name__ == "__main__":

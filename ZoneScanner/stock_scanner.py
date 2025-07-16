@@ -74,7 +74,7 @@ class StockScanner:
         if symbols is None:
             symbols = get_symbol_list(csv_path=source_csv, sectors=sectors)
         print("🚀 Starting demand‑zone scan …")
-        logging.info("Starting demand‑zone scan …")
+        logging.info("🚀 Starting demand‑zone scan …")
 
         all_zones = []
         for symbol in symbols:
@@ -97,7 +97,7 @@ class StockScanner:
 
             except Exception as e:
                 print(f"❌ Error with {symbol} [{self.tf}] – {type(e).__name__}: {e}")
-                logging.warning(f"Error with {symbol} [{self.tf}] – {type(e).__name__}: {e}")
+                logging.warning(f"❌ Error with {symbol} [{self.tf}] – {type(e).__name__}: {e}")
 
         if all_zones:
             result_df = pd.DataFrame(all_zones)
@@ -107,7 +107,7 @@ class StockScanner:
             result_df.to_csv(output_file, index=False)
             self.zones = result_df.to_dict(orient="records")
             print(f"\n📁 Saved to: {output_file}")
-            logging.info(f"Saved demand zones to: {output_file}")
+            logging.info(f"📁 Saved demand zones to: {output_file}")
         else:
             print("🚫 No valid demand zones detected.")
-            logging.info("No valid demand zones detected.")
+            logging.info("🚫 No valid demand zones detected.")
