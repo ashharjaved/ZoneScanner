@@ -13,26 +13,45 @@ from ZoneScanner.fetch import get_symbol_list
 LOG_DIR = "logs"
 LOG_RETENTION_DAYS = 7
 
+import io
+
 def setup_logging():
+    # 💡 Force stdout/stderr to use UTF-8 and avoid UnicodeEncodeError
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
     os.makedirs(LOG_DIR, exist_ok=True)
     now = datetime.now()
+
+    # Delete old log files
     for f in os.listdir(LOG_DIR):
         path = os.path.join(LOG_DIR, f)
         if os.path.isfile(path):
             mod_time = datetime.fromtimestamp(os.path.getmtime(path))
             if (now - mod_time).days > LOG_RETENTION_DAYS:
                 os.remove(path)
+
     log_path = os.path.join(LOG_DIR, f"scanner_{now.strftime('%Y%m%d_%H%M%S')}.log")
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+
+    # Reset logging (important if previous logging was already configured)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers.clear()
+
+    # File handler (UTF-8 safe)
+    file_handler = logging.FileHandler(log_path, encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
+    # Console handler (safe with replacement)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
     logging.info(f"📋 Logging to: {log_path}")
     return log_path
+
 
 def main():
     parser = argparse.ArgumentParser(description="Demand Zone Screener")
@@ -56,7 +75,8 @@ def main():
         symbols = get_symbol_list(csv_path="StockList.csv", sectors=args.sector)
         if args.limit:
             symbols = symbols[:args.limit]
-
+    
+    all_zones = []
     for tf in args.tf:
         scanner = StockScanner(
             tf=tf,
@@ -68,17 +88,22 @@ def main():
             sectors=args.sector,
             symbols=symbols
         )
+        if scanner.zones:
+            logging.info(f"Zones found in tf={tf}: {len(scanner.zones)}")
+            all_zones.extend(scanner.zones)
+        else:
+            logging.info(f"No zones found in tf={tf}")
 
     # Final summary log
     logging.info("\n================ SUMMARY ================")
     total_zones = 0
     for zone in all_zones:
-        logging.info(f"✅ {zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Proximal']} - {zone['Distal']} | Start: {zone['Start']}")
+        logging.info(f"{zone['Symbol']} | {zone['Timeframe']} | Score: {zone['Score']} | Zone: {zone['Proximal']} - {zone['Distal']} | Start: {zone['Start']}")
         total_zones += 1
     if total_zones == 0:
-        logging.info("⚠️ No valid zones detected.")
+        logging.info("No valid zones detected.")
     else:
-        logging.info(f"🎯 Total zones detected: {total_zones}")
+        logging.info(f"Total zones detected: {total_zones}")
     logging.info("========================================")      
     
 if __name__ == "__main__":

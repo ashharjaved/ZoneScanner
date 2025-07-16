@@ -18,6 +18,7 @@ class StockScanner:
         self.plot = plot
         self.tf = tf
         self.period = self._get_max_period(tf)
+        self.zones = []
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def _get_max_period(self, tf: str) -> str:
@@ -104,6 +105,7 @@ class StockScanner:
                 result_df = result_df.sort_values(by="Score", ascending=False)
             output_file = f"demand_zones_{self.tf}.csv"
             result_df.to_csv(output_file, index=False)
+            self.zones = result_df.to_dict(orient="records")
             print(f"\n📁 Saved to: {output_file}")
             logging.info(f"Saved demand zones to: {output_file}")
         else:
