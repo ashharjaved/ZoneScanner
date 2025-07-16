@@ -2,6 +2,8 @@ import pandas as pd
 from datetime import datetime
 import os
 import plotly.graph_objects as go
+import logging
+from ZoneScanner.support_resistance import detect_support_resistance
 
 def to_float(x):
     try:
@@ -42,7 +44,7 @@ def count_green_after_legout(df, legout_end_idx):
         except Exception:
             break  # defensively break on any data issue
     return count
-
+    
 def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True, min_base: int = 1, max_base: int = 3, distance_range=(1.0, 5.0)) -> list[dict]:
     zones = []
     df = df.copy()
@@ -50,6 +52,14 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
 
     if "Date" not in df.columns:
         df["Date"] = df.index
+    # === Detect Support/Resistance once per DF ===
+    sr_levels = detect_support_resistance(df)
+    all_supports = sr_levels.get("Support", [])
+    all_resistances = sr_levels.get("Resistance", [])
+    
+    support_threshold_pct = 1.5  # within 1.5% = "Near Support"
+    resistance_threshold_pct = 1.5  # within 1.5% = "Near Resistance"
+
 
     tf_label_map = {"1mo": "Month", "1wk": "Week", "1d": "Day"}
     label = tf_label_map.get(tf, "Month")
@@ -117,6 +127,47 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
             #else:
             #    curve_label = "High on Curve"
 
+            # === Nearest Support & Resistance ===
+            nearest_support = max([s for s in all_supports if s <= proximal], default=None)
+            nearest_resistance = min([r for r in all_resistances if r >= proximal], default=None)
+            
+            # === Position Sizing Logic ===
+            capital = 100000             # total capital (set dynamically if needed)
+            risk_pct = 0.01              # risk per trade (1%)
+            capital_to_risk = capital * risk_pct
+            stop_loss_price = round(proximal - distal, 2)
+            
+            if nearest_resistance is not None and stop_loss_price > 0:
+                rr_ratio = round((nearest_resistance - proximal) / stop_loss_price, 2)
+            else:
+                rr_ratio = None
+            
+            if rr_ratio is None or rr_ratio < 1.5:
+                continue  # skip trades with poor risk/reward
+
+            quantity = int(capital_to_risk // stop_loss_price) if stop_loss_price > 0 else 0
+            position_size_value = round(quantity * proximal, 2)
+            
+            max_exposure_pct = 0.2  # max 20% capital per trade
+            if position_size_value > capital * max_exposure_pct:
+                logging.warning(f"⛔ Skipped {symbol}: position ₹{position_size_value} > max allowed ₹{capital * max_exposure_pct}")
+                continue # skip oversized trades
+
+            sr_position = "In Between"
+            if nearest_support is not None:
+                support_gap_pct = abs((proximal - nearest_support) / proximal) * 100
+                if support_gap_pct <= support_threshold_pct:
+                    sr_position = "Near Support"
+            
+            if nearest_resistance is not None:
+                resistance_gap_pct = abs((nearest_resistance - proximal) / proximal) * 100
+                if resistance_gap_pct <= resistance_threshold_pct:
+                    sr_position = "Near Resistance"
+            
+            # If it's near both (rare but can happen), prioritize support
+            if "Near Support" in sr_position and "Near Resistance" in sr_position:
+                sr_position = "Near Support"
+
             zones.append({
                 "Symbol": symbol,
                 "Timeframe": tf,
@@ -134,8 +185,14 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
                 f"Leg-in {label}": to_scalar(leg_in["Date"]).strftime(time_fmt),
                 f"Leg-out {label}": to_scalar(leg_out_candle["Date"]).strftime(time_fmt),
                 "Zone Type": {"1mo": "MIT", "1wk": "WIT", "1d": "DIT"}.get(tf, "Unknown"),
+                "Nearest Support": nearest_support,
+                "Nearest Resistance": nearest_resistance,
+                "S/R Zone Position": sr_position,
                 "Distance": distance_pct,
-                "Stop Loss %": stop_loss_pct
+                "RR Ratio": rr_ratio,
+                "Stop Loss %": stop_loss_pct,
+                "Quantity": quantity,
+                "Position Size ₹": position_size_value
             })
 
     return zones
