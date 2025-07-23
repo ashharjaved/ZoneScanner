@@ -12,7 +12,7 @@ from ZoneScanner.fetch import get_symbol_list
 # demandzone --tf 1wk --limit 5 --fresh --distance-range 1 5 --min-base 1 --max-base 3
 
 LOG_DIR = "logs"
-LOG_RETENTION_DAYS = 7
+LOG_RETENTION_DAYS = 2
 
 def setup_logging():
     # 💡 Force stdout/stderr to use UTF-8 and avoid UnicodeEncodeError

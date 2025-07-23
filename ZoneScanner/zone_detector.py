@@ -1,10 +1,11 @@
 import pandas as pd
-from datetime import datetime
 import os
-import plotly.graph_objects as go
 import logging
+import plotly.graph_objects as go
+from datetime import datetime
 from ZoneScanner.support_resistance import detect_support_resistance
 
+# === Helper functions ===
 def to_float(x):
     try:
         if hasattr(x, "item"):
@@ -31,35 +32,28 @@ def is_base_candle(candle) -> bool:
     )
 
 def count_green_after_legout(df, legout_end_idx):
-    """
-    Count number of green candles after leg-out until the first red candle appears.
-    """
     count = 0
     for i in range(legout_end_idx + 1, len(df)):
         try:
-            if to_float(df.iloc[i]["Close"]) > to_float(df.iloc[i]["Open"]):  # green candle
+            if to_float(df.iloc[i]["Close"]) > to_float(df.iloc[i]["Open"]):
                 count += 1
             else:
-                break  # first red candle
+                break
         except Exception:
-            break  # defensively break on any data issue
+            break
     return count
-    
+
+# === Demand Zone Detection ===
 def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True, min_base: int = 1, max_base: int = 3, distance_range=(1.0, 5.0)) -> list[dict]:
     zones = []
     df = df.copy()
     df.index = pd.to_datetime(df.index)
-
     if "Date" not in df.columns:
         df["Date"] = df.index
-    # === Detect Support/Resistance once per DF ===
+
     sr_levels = detect_support_resistance(df)
     all_supports = sr_levels.get("Support", [])
     all_resistances = sr_levels.get("Resistance", [])
-    
-    support_threshold_pct = 1.5  # within 1.5% = "Near Support"
-    resistance_threshold_pct = 1.5  # within 1.5% = "Near Resistance"
-
 
     tf_label_map = {"1mo": "Month", "1wk": "Week", "1d": "Day"}
     label = tf_label_map.get(tf, "Month")
@@ -82,10 +76,7 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
                 continue
 
             future = df.iloc[i + base_len + 1:]
-            fresh = True
-            if not future.empty and "Low" in future.columns:
-                fresh_vals = (future["Low"] <= to_float(base["Close"].max()))
-                fresh = not bool(fresh_vals.any().item())
+            fresh = not bool((future["Low"] <= to_float(base["Close"].max())).any()) if not future.empty else True
             if fresh_only and not fresh:
                 continue
 
@@ -105,68 +96,33 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
             distal = to_float(base["Low"].min())
             distance_pct = round(((cmp - proximal) / cmp) * 100, 2)
             stop_loss_pct = round(((proximal - distal) / proximal) * 100, 2)
-
             if distance_pct < distance_range[0] or distance_pct > distance_range[1]:
                 continue
 
-            # ✅ Green candles after leg-out
             green_candles_after_legout = count_green_after_legout(df, legout_end_idx)
-            
-            # ✅ Equilibrium
             equilibrium = round((proximal + distal) / 2, 2)
 
-            # ✅ Curve Position
-            #curve_low = df["Low"].min()
-            #curve_high = df["High"].max()
-            #position = (equilibrium - curve_low) / (curve_high - curve_low)
-
-            #if position <= 0.25:
-            #    curve_label = "Very Low on Curve"
-            #elif position <= 0.5:
-            #    curve_label = "Low on Curve"
-            #else:
-            #    curve_label = "High on Curve"
-
-            # === Nearest Support & Resistance ===
             nearest_support = max([s for s in all_supports if s <= proximal], default=None)
             nearest_resistance = min([r for r in all_resistances if r >= proximal], default=None)
-            
-            # === Position Sizing Logic ===
-            capital = 100000             # total capital (set dynamically if needed)
-            risk_pct = 0.01              # risk per trade (1%)
+
+            capital = 100000
+            risk_pct = 0.01
             capital_to_risk = capital * risk_pct
             stop_loss_price = round(proximal - distal, 2)
-            
-            if nearest_resistance is not None and stop_loss_price > 0:
-                rr_ratio = round((nearest_resistance - proximal) / stop_loss_price, 2)
-            else:
-                rr_ratio = None
-            
+            rr_ratio = round((nearest_resistance - proximal) / stop_loss_price, 2) if nearest_resistance and stop_loss_price > 0 else None
             if rr_ratio is None or rr_ratio < 1.5:
-                continue  # skip trades with poor risk/reward
+                continue
 
             quantity = int(capital_to_risk // stop_loss_price) if stop_loss_price > 0 else 0
             position_size_value = round(quantity * proximal, 2)
-            
-            max_exposure_pct = 0.2  # max 20% capital per trade
-            if position_size_value > capital * max_exposure_pct:
-                logging.warning(f"⛔ Skipped {symbol}: position ₹{position_size_value} > max allowed ₹{capital * max_exposure_pct}")
-                continue # skip oversized trades
+            if position_size_value > capital * 0.2:
+                continue
 
             sr_position = "In Between"
-            if nearest_support is not None:
-                support_gap_pct = abs((proximal - nearest_support) / proximal) * 100
-                if support_gap_pct <= support_threshold_pct:
-                    sr_position = "Near Support"
-            
-            if nearest_resistance is not None:
-                resistance_gap_pct = abs((nearest_resistance - proximal) / proximal) * 100
-                if resistance_gap_pct <= resistance_threshold_pct:
-                    sr_position = "Near Resistance"
-            
-            # If it's near both (rare but can happen), prioritize support
-            if "Near Support" in sr_position and "Near Resistance" in sr_position:
+            if nearest_support and abs((proximal - nearest_support) / proximal) * 100 <= 1.5:
                 sr_position = "Near Support"
+            elif nearest_resistance and abs((nearest_resistance - proximal) / proximal) * 100 <= 1.5:
+                sr_position = "Near Resistance"
 
             zones.append({
                 "Symbol": symbol,
@@ -176,7 +132,6 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
                 "Stop Loss": round(distal, 2),
                 "Equilibrium": equilibrium,
                 "Green After LegOut": green_candles_after_legout,
-                #"Curve Position": curve_label,
                 "Score": score,
                 "Fresh": fresh,
                 "Legout Strength": round(leg_out_strength, 2),
@@ -198,7 +153,7 @@ def detect_zones(df: pd.DataFrame, tf: str, symbol: str, fresh_only: bool = True
     return zones
 
 class DemandZoneScanner:
-    def __init__(self, symbols, timeframes, fresh_only=True, plot=False, local_csv_dir="csv_data"):
+    def __init__(self, symbols, timeframes, fresh_only=True, plot=False, local_csv_dir="parquet_data"):
         self.symbols = symbols
         self.timeframes = timeframes
         self.fresh_only = fresh_only
@@ -207,26 +162,16 @@ class DemandZoneScanner:
 
     def run(self):
         all_zones = []
-        for tf, period in self.timeframes.items():
+        for tf, _ in self.timeframes.items():
             for symbol in self.symbols:
                 try:
-                    filepath = os.path.join(self.local_csv_dir, f"{symbol}_{tf}.csv")
+                    filepath = os.path.join(self.local_csv_dir, tf, f"{symbol}.parquet")
                     if not os.path.exists(filepath):
-                        print(f"⚠️ Cached file not found: {filepath}")
+                        print(f"⚠️ Parquet file not found: {filepath}")
                         continue
 
-                    df = pd.read_csv(filepath, index_col="Date", parse_dates=True)
+                    df = pd.read_parquet(filepath)
                     df = df.loc[:, ~df.columns.duplicated()]
-
-                    suffix = f"_{symbol}"
-                    rename_map = {
-                        f"Open{suffix}": "Open",
-                        f"High{suffix}": "High",
-                        f"Low{suffix}": "Low",
-                        f"Close{suffix}": "Close",
-                        f"Volume{suffix}": "Volume"
-                    }
-                    df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 
                     for col in df.columns:
                         if any(x in col for x in ["Open", "High", "Low", "Close", "Volume"]):
